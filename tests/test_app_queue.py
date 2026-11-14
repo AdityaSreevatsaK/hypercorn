@@ -66,7 +66,9 @@ async def test_zero_limit_is_unbounded_until_finished() -> None:
 async def test_rendezvous_queue_blocks_until_received() -> None:
     queue = AppQueue(0, asyncio.Condition(), rendezvous=True)
     message: HTTPRequestEvent = {
-        "type": "http.request", "body": b"rendezvous", "more_body": True
+        "type": "http.request",
+        "body": b"rendezvous",
+        "more_body": True,
     }
     sender = asyncio.create_task(queue(message))
     await asyncio.sleep(0)
@@ -90,7 +92,9 @@ async def test_rendezvous_queue_orders_concurrent_senders() -> None:
     assert all(not sender.done() for sender in senders)
     for number in range(30):
         assert await queue.receive() == {
-            "type": "http.request", "body": str(number).encode(), "more_body": True
+            "type": "http.request",
+            "body": str(number).encode(),
+            "more_body": True,
         }
         await asyncio.sleep(0)
     await asyncio.wait_for(asyncio.gather(*senders), 1)
