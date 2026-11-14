@@ -9,23 +9,33 @@ from .typing import ASGIReceiveEvent
 class AppQueue:
     """Bounded ASGI input queue whose producers can be released on disconnect.
 
-    Condition must be an asyncio.Condition or trio.Condition. In either worker
-    the queue has the same backpressure and shutdown semantics.
+    Condition must be an asyncio.Condition or trio.Condition. The optional
+    rendezvous mode preserves Trio's zero-capacity memory-channel semantics.
     """
 
-    def __init__(self, max_size: int, condition: Any) -> None:
+    def __init__(self, max_size: int, condition: Any, *, rendezvous: bool = False) -> None:
         self._messages: deque[ASGIReceiveEvent] = deque()
         self._max_size = max_size
         self._condition = condition
+        self._rendezvous = rendezvous
+        self._delivered = 0
         self._finished = False
 
     async def __call__(self, message: ASGIReceiveEvent) -> None:
         async with self._condition:
-            while not self._finished and 0 < self._max_size <= len(self._messages):
+            while not self._finished and (
+                (self._rendezvous and self._messages)
+                or (0 < self._max_size <= len(self._messages))
+            ):
                 await self._condition.wait()
-            if not self._finished:
-                self._messages.append(message)
-                self._condition.notify_all()
+            if self._finished:
+                return
+            delivered = self._delivered
+            self._messages.append(message)
+            self._condition.notify_all()
+            if self._rendezvous:
+                while not self._finished and self._delivered == delivered:
+                    await self._condition.wait()
 
     async def receive(self) -> ASGIReceiveEvent:
         async with self._condition:
@@ -34,6 +44,7 @@ class AppQueue:
             if self._finished:
                 return {"type": "http.disconnect"}
             message = self._messages.popleft()
+            self._delivered += 1
             self._condition.notify_all()
             return message
 
