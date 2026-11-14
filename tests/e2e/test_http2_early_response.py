@@ -87,6 +87,7 @@ def probe(
     path: str = "/early",
     *,
     reset: bool = False,
+    extra_streams: int = 1,
     before_close: Callable[[socket.socket, dict[int, str], set[int]], None] | None = None,
 ) -> tuple[dict[int, str], set[int]]:
     connection = h2.connection.H2Connection(
@@ -107,21 +108,24 @@ def probe(
         connection.reset_stream(1)
     elif path == "/consume":
         connection.end_stream(1)
-    connection.send_headers(
-        3,
-        [
-            (":method", "GET"), (":scheme", "http"),
-            (":authority", "localhost"), (":path", "/next"),
-        ],
-        end_stream=True,
-    )
+    for follow_stream_id in range(3, 2 * extra_streams + 3, 2):
+        connection.send_headers(
+            follow_stream_id,
+            [
+                (":method", "GET"), (":scheme", "http"),
+                (":authority", "localhost"), (":path", "/next"),
+            ],
+            end_stream=True,
+        )
 
     with socket.create_connection(("127.0.0.1", port), timeout=3) as sock:
         sock.sendall(connection.data_to_send())
         statuses: dict[int, str] = {}
         ended: set[int] = set()
         deadline = time.monotonic() + 3
-        expected_end = {3} if reset else {1, 3}
+        expected_end = set(range(3, 2 * extra_streams + 3, 2))
+        if not reset:
+            expected_end.add(1)
         while not expected_end.issubset(ended) and time.monotonic() < deadline:
             sock.settimeout(max(0.01, deadline - time.monotonic()))
             try:
@@ -186,3 +190,13 @@ def test_http11_early_response_compatibility(server: ServerFixture) -> None:
             + b"x" * 40960
         )
         assert b"HTTP/1.1 413" in sock.recv(4096)
+
+
+@pytest.mark.parametrize("data_frames", [40, 60])
+def test_multiple_following_http2_streams_not_blocked(
+    server: ServerFixture, data_frames: int
+) -> None:
+    statuses, ended = probe(server[0], data_frames, extra_streams=20)
+    expected_statuses = {1: "413", **{index: "200" for index in range(3, 43, 2)}}
+    assert statuses == expected_statuses
+    assert ended == set(expected_statuses)
