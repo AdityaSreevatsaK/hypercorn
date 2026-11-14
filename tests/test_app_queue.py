@@ -60,3 +60,48 @@ async def test_zero_limit_is_unbounded_until_finished() -> None:
     for _ in range(50):
         assert (await queue.receive())["type"] == "http.request"
     await queue.finish()
+
+
+@pytest.mark.asyncio
+async def test_rendezvous_queue_blocks_until_received() -> None:
+    queue = AppQueue(0, asyncio.Condition(), rendezvous=True)
+    sender = asyncio.create_task(
+        queue({"type": "http.request", "body": b"rendezvous", "more_body": True})
+    )
+    await asyncio.sleep(0)
+    assert not sender.done()
+    assert (await queue.receive())["body"] == b"rendezvous"
+    await asyncio.wait_for(sender, 1)
+
+
+@pytest.mark.asyncio
+async def test_rendezvous_queue_orders_concurrent_senders() -> None:
+    queue = AppQueue(0, asyncio.Condition(), rendezvous=True)
+    senders = []
+    for number in range(30):
+        senders.append(
+            asyncio.create_task(
+                queue({"type": "http.request", "body": str(number).encode(), "more_body": True})
+            )
+        )
+        await asyncio.sleep(0)
+
+    assert all(not sender.done() for sender in senders)
+    for number in range(30):
+        assert (await queue.receive())["body"] == str(number).encode()
+        await asyncio.sleep(0)
+    await asyncio.wait_for(asyncio.gather(*senders), 1)
+
+
+@pytest.mark.asyncio
+async def test_rendezvous_queue_finish_releases_blocked_senders() -> None:
+    queue = AppQueue(0, asyncio.Condition(), rendezvous=True)
+    senders = [
+        asyncio.create_task(queue({"type": "http.request", "body": b"x", "more_body": True}))
+        for _ in range(2)
+    ]
+    await asyncio.sleep(0)
+    assert all(not sender.done() for sender in senders)
+    await queue.finish()
+    await asyncio.wait_for(asyncio.gather(*senders), 1)
+    assert await queue.receive() == {"type": "http.disconnect"}
