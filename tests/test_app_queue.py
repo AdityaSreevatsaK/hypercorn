@@ -65,19 +65,20 @@ async def test_zero_limit_is_unbounded_until_finished() -> None:
 @pytest.mark.asyncio
 async def test_rendezvous_queue_blocks_until_received() -> None:
     queue = AppQueue(0, asyncio.Condition(), rendezvous=True)
-    sender = asyncio.create_task(
-        queue({"type": "http.request", "body": b"rendezvous", "more_body": True})
-    )
+    message: HTTPRequestEvent = {
+        "type": "http.request", "body": b"rendezvous", "more_body": True
+    }
+    sender = asyncio.create_task(queue(message))
     await asyncio.sleep(0)
     assert not sender.done()
-    assert (await queue.receive())["body"] == b"rendezvous"
+    assert await queue.receive() == message
     await asyncio.wait_for(sender, 1)
 
 
 @pytest.mark.asyncio
 async def test_rendezvous_queue_orders_concurrent_senders() -> None:
     queue = AppQueue(0, asyncio.Condition(), rendezvous=True)
-    senders = []
+    senders: list[asyncio.Task[None]] = []
     for number in range(30):
         senders.append(
             asyncio.create_task(
@@ -88,7 +89,9 @@ async def test_rendezvous_queue_orders_concurrent_senders() -> None:
 
     assert all(not sender.done() for sender in senders)
     for number in range(30):
-        assert (await queue.receive())["body"] == str(number).encode()
+        assert await queue.receive() == {
+            "type": "http.request", "body": str(number).encode(), "more_body": True
+        }
         await asyncio.sleep(0)
     await asyncio.wait_for(asyncio.gather(*senders), 1)
 
