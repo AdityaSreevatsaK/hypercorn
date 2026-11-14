@@ -54,7 +54,11 @@ class TaskGroup:
         scope: Scope,
         send: Callable[[ASGISendEvent | None], Awaitable[None]],
     ) -> AppQueue:
-        app_queue = AppQueue(config.max_app_queue_size, trio.Condition())
+        app_queue = AppQueue(
+            config.max_app_queue_size,
+            trio.Condition(),
+            rendezvous=config.max_app_queue_size == 0,
+        )
         self._nursery.start_soon(
             _handle,
             app,
