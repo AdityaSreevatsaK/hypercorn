@@ -18,6 +18,8 @@ import pytest
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="Requires POSIX process-group cleanup")
 
+ServerFixture = tuple[int, subprocess.Popen[bytes]]
+
 APP = """async def app(scope, receive, send):
     if scope["type"] == "lifespan":
         while True:
@@ -41,7 +43,7 @@ APP = """async def app(scope, receive, send):
 
 
 @pytest.fixture
-def server(tmp_path: Path) -> Iterator[tuple[int, subprocess.Popen[bytes]]]:
+def server(tmp_path: Path) -> Iterator[ServerFixture]:
     (tmp_path / "app.py").write_text(APP)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -144,25 +146,25 @@ def probe(
 
 
 @pytest.mark.parametrize("data_frames", [0, 1, 40, 60])
-def test_later_http2_stream_not_blocked(server, data_frames: int) -> None:
+def test_later_http2_stream_not_blocked(server: ServerFixture, data_frames: int) -> None:
     statuses, ended = probe(server[0], data_frames)
     assert statuses == {1: "413", 3: "200"}
     assert ended == {1, 3}
 
 
-def test_normal_request_body_consumption(server) -> None:
+def test_normal_request_body_consumption(server: ServerFixture) -> None:
     statuses, ended = probe(server[0], 40, path="/consume")
     assert statuses == {1: "200", 3: "200"}
     assert ended == {1, 3}
 
 
-def test_client_reset_does_not_block_later_stream(server) -> None:
+def test_client_reset_does_not_block_later_stream(server: ServerFixture) -> None:
     statuses, ended = probe(server[0], 40, reset=True)
     assert statuses[3] == "200"
     assert 3 in ended
 
 
-def test_shutdown_after_early_response_with_client_connected(server) -> None:
+def test_shutdown_after_early_response_with_client_connected(server: ServerFixture) -> None:
     _, process = server
 
     def stop_while_socket_open(
@@ -176,7 +178,7 @@ def test_shutdown_after_early_response_with_client_connected(server) -> None:
     probe(server[0], 40, before_close=stop_while_socket_open)
 
 
-def test_http11_early_response_compatibility(server) -> None:
+def test_http11_early_response_compatibility(server: ServerFixture) -> None:
     with socket.create_connection(("127.0.0.1", server[0]), timeout=3) as sock:
         sock.settimeout(3)
         sock.sendall(

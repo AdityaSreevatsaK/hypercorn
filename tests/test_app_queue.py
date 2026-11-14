@@ -5,13 +5,14 @@ import asyncio
 import pytest
 
 from hypercorn.app_queue import AppQueue
+from hypercorn.typing import HTTPRequestEvent
 
 
 @pytest.mark.asyncio
 async def test_queue_preserves_backpressure_and_message_order() -> None:
     queue = AppQueue(1, asyncio.Condition())
-    first = {"type": "http.request", "body": b"first", "more_body": True}
-    second = {"type": "http.request", "body": b"second", "more_body": False}
+    first: HTTPRequestEvent = {"type": "http.request", "body": b"first", "more_body": True}
+    second: HTTPRequestEvent = {"type": "http.request", "body": b"second", "more_body": False}
     await queue(first)
     blocked = asyncio.create_task(queue(second))
     await asyncio.sleep(0)
@@ -53,7 +54,7 @@ async def test_finished_queue_wakes_waiting_receiver() -> None:
 @pytest.mark.asyncio
 async def test_zero_limit_is_unbounded_until_finished() -> None:
     queue = AppQueue(0, asyncio.Condition())
-    message = {"type": "http.request", "body": b"x", "more_body": True}
+    message: HTTPRequestEvent = {"type": "http.request", "body": b"x", "more_body": True}
     for _ in range(50):
         await asyncio.wait_for(queue(message), 1)
     for _ in range(50):
