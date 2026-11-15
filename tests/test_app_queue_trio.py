@@ -100,3 +100,28 @@ async def test_trio_bounded_queue_preserves_backpressure() -> None:
         with trio.fail_after(1):
             await released.wait()
         assert await queue.receive() == second
+
+@pytest.mark.trio
+async def test_trio_disconnect_preserves_body_and_releases_blocked_sender() -> None:
+    queue = AppQueue(1, trio.Condition())
+    first: HTTPRequestEvent = {
+        "type": "http.request",
+        "body": b"first",
+        "more_body": False,
+    }
+    await queue(first)
+    released = trio.Event()
+
+    async def send() -> None:
+        await queue({"type": "http.request", "body": b"ignored", "more_body": True})
+        released.set()
+
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(send)
+        await wait_all_tasks_blocked()
+        assert not released.is_set()
+        await queue.disconnect()
+        with trio.fail_after(1):
+            await released.wait()
+        assert await queue.receive() == first
+        assert await queue.receive() == {"type": "http.disconnect"}
