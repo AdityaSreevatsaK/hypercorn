@@ -33,9 +33,7 @@ async def test_finished_queue_releases_blocked_producers_and_notifies_consumer()
     assert not blocked.done()
     await queue.finish()
     await asyncio.wait_for(blocked, 1)
-    await asyncio.wait_for(
-        queue({"type": "http.request", "body": b"late", "more_body": True}), 1
-    )
+    await asyncio.wait_for(queue({"type": "http.request", "body": b"late", "more_body": True}), 1)
     assert await queue.receive() == {"type": "http.disconnect"}
     assert await queue.receive() == {"type": "http.disconnect"}
     await queue.finish()
