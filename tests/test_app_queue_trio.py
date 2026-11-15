@@ -70,3 +70,32 @@ async def test_trio_zero_capacity_finish_releases_sender() -> None:
         with trio.fail_after(1):
             await released.wait()
         assert await queue.receive() == {"type": "http.disconnect"}
+
+@pytest.mark.trio
+async def test_trio_bounded_queue_preserves_backpressure() -> None:
+    queue = AppQueue(1, trio.Condition())
+    first: HTTPRequestEvent = {
+        "type": "http.request",
+        "body": b"first",
+        "more_body": True,
+    }
+    second: HTTPRequestEvent = {
+        "type": "http.request",
+        "body": b"second",
+        "more_body": False,
+    }
+    await queue(first)
+    released = trio.Event()
+
+    async def send() -> None:
+        await queue(second)
+        released.set()
+
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(send)
+        await wait_all_tasks_blocked()
+        assert not released.is_set()
+        assert await queue.receive() == first
+        with trio.fail_after(1):
+            await released.wait()
+        assert await queue.receive() == second
