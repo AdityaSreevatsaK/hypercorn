@@ -41,7 +41,7 @@ async def test_close_notifies_finished_queue() -> None:
     await start_request(stream)
     await stream.handle(StreamClosed(stream_id=1))
     app_put = cast(AsyncMock, stream.app_put)
-    app_put.finish.assert_awaited_once()
+    app_put.disconnect.assert_awaited_once()
     app_put.assert_not_awaited()
 
 
