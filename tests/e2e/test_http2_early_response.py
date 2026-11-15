@@ -10,6 +10,7 @@ import sys
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import cast
 
 import h2.config
 import h2.connection
@@ -51,8 +52,16 @@ def server(tmp_path: Path) -> Iterator[ServerFixture]:
 
     process = subprocess.Popen(
         [
-            sys.executable, "-m", "hypercorn", "--bind", f"127.0.0.1:{port}",
-            "--workers", "1", "--graceful-timeout", "2", "app:app",
+            sys.executable,
+            "-m",
+            "hypercorn",
+            "--bind",
+            f"127.0.0.1:{port}",
+            "--workers",
+            "1",
+            "--graceful-timeout",
+            "2",
+            "app:app",
         ],
         cwd=tmp_path,
         stdout=subprocess.DEVNULL,
@@ -97,8 +106,10 @@ def probe(
     connection.send_headers(
         1,
         [
-            (":method", "POST"), (":scheme", "http"),
-            (":authority", "localhost"), (":path", path),
+            (":method", "POST"),
+            (":scheme", "http"),
+            (":authority", "localhost"),
+            (":path", path),
         ],
         end_stream=False,
     )
@@ -112,8 +123,10 @@ def probe(
         connection.send_headers(
             follow_stream_id,
             [
-                (":method", "GET"), (":scheme", "http"),
-                (":authority", "localhost"), (":path", "/next"),
+                (":method", "GET"),
+                (":scheme", "http"),
+                (":authority", "localhost"),
+                (":path", "/next"),
             ],
             end_stream=True,
         )
@@ -136,7 +149,7 @@ def probe(
                 break
             for event in connection.receive_data(data):
                 if isinstance(event, h2.events.ResponseReceived):
-                    statuses[event.stream_id] = dict(event.headers)[":status"]
+                    statuses[event.stream_id] = cast(dict[str, str], dict(event.headers))[":status"]
                 elif isinstance(event, h2.events.DataReceived):
                     connection.acknowledge_received_data(
                         event.flow_controlled_length, event.stream_id
