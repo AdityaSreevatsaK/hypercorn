@@ -110,3 +110,34 @@ async def test_rendezvous_queue_finish_releases_blocked_senders() -> None:
     await queue.finish()
     await asyncio.wait_for(asyncio.gather(*senders), 1)
     assert await queue.receive() == {"type": "http.disconnect"}
+
+@pytest.mark.asyncio
+async def test_disconnect_preserves_queued_body_and_releases_blocked_producer() -> None:
+    queue = AppQueue(1, asyncio.Condition())
+    first: HTTPRequestEvent = {
+        "type": "http.request",
+        "body": b"first",
+        "more_body": False,
+    }
+    await queue(first)
+    blocked = asyncio.create_task(
+        queue({"type": "http.request", "body": b"late", "more_body": True})
+    )
+    await asyncio.sleep(0)
+    assert not blocked.done()
+    await queue.disconnect()
+    await asyncio.wait_for(blocked, 1)
+    assert await queue.receive() == first
+    assert await queue.receive() == {"type": "http.disconnect"}
+    await queue({"type": "http.request", "body": b"ignored", "more_body": True})
+    assert await queue.receive() == {"type": "http.disconnect"}
+
+
+@pytest.mark.asyncio
+async def test_disconnect_wakes_waiting_receiver() -> None:
+    queue = AppQueue(1, asyncio.Condition())
+    receiver = asyncio.create_task(queue.receive())
+    await asyncio.sleep(0)
+    assert not receiver.done()
+    await queue.disconnect()
+    assert await asyncio.wait_for(receiver, 1) == {"type": "http.disconnect"}
