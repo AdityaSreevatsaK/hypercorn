@@ -101,6 +101,7 @@ async def test_trio_bounded_queue_preserves_backpressure() -> None:
             await released.wait()
         assert await queue.receive() == second
 
+
 @pytest.mark.trio
 async def test_trio_disconnect_preserves_body_and_releases_blocked_sender() -> None:
     queue = AppQueue(1, trio.Condition())
