@@ -129,7 +129,7 @@ class HTTPStream:
             if self.state != ASGIHTTPState.CLOSED:
                 await self.config.log.access(self.scope, None, time() - self.start_time)
             if self.app_put is not None:
-                await self.app_put.finish()
+                await self.app_put.disconnect()
 
     async def app_send(self, message: ASGISendEvent | None) -> None:
         if message is None:  # ASGI App has finished sending messages
