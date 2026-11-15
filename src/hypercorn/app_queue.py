@@ -24,8 +24,7 @@ class AppQueue:
     async def __call__(self, message: ASGIReceiveEvent) -> None:
         async with self._condition:
             while not self._finished and (
-                (self._rendezvous and self._messages)
-                or (0 < self._max_size <= len(self._messages))
+                (self._rendezvous and self._messages) or (0 < self._max_size <= len(self._messages))
             ):
                 await self._condition.wait()
             if self._finished:
