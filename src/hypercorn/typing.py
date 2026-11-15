@@ -316,6 +316,9 @@ class AppQueue(Protocol):
     async def __call__(self, message: ASGIReceiveEvent) -> None:
         pass
 
+    async def disconnect(self) -> None:
+        pass
+
     async def finish(self) -> None:
         pass
 
