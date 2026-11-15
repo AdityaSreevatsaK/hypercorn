@@ -71,6 +71,7 @@ async def test_trio_zero_capacity_finish_releases_sender() -> None:
             await released.wait()
         assert await queue.receive() == {"type": "http.disconnect"}
 
+
 @pytest.mark.trio
 async def test_trio_bounded_queue_preserves_backpressure() -> None:
     queue = AppQueue(1, trio.Condition())
