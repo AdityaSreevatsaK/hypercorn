@@ -9,7 +9,7 @@ from hypercorn.asyncio.worker_context import WorkerContext
 from hypercorn.config import Config
 from hypercorn.protocol.events import Body, Request, StreamClosed
 from hypercorn.protocol.http_stream import HTTPStream
-from hypercorn.typing import ConnectionState
+from hypercorn.typing import ConnectionState, HTTPResponseStartEvent
 
 
 def make_stream() -> HTTPStream:
@@ -49,7 +49,8 @@ async def test_close_notifies_finished_queue() -> None:
 async def test_response_finished_drops_late_body() -> None:
     stream = make_stream()
     await start_request(stream)
-    await stream.app_send({"type": "http.response.start", "status": 200, "headers": []})
+    start: HTTPResponseStartEvent = {"type": "http.response.start", "status": 200, "headers": []}
+    await stream.app_send(start)
     await stream.app_send({"type": "http.response.body", "body": b"ok"})
     app_put = cast(AsyncMock, stream.app_put)
     app_put.finish.assert_awaited_once()
