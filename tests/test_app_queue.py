@@ -111,6 +111,7 @@ async def test_rendezvous_queue_finish_releases_blocked_senders() -> None:
     await asyncio.wait_for(asyncio.gather(*senders), 1)
     assert await queue.receive() == {"type": "http.disconnect"}
 
+
 @pytest.mark.asyncio
 async def test_disconnect_preserves_queued_body_and_releases_blocked_producer() -> None:
     queue = AppQueue(1, asyncio.Condition())
